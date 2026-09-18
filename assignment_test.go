@@ -123,6 +123,128 @@ func TestLookup(t *testing.T) {
 	}
 }
 
+func TestLocalLookupPrecedesGlobals(t *testing.T) {
+	resetRho(t)
+	localEnvironment = nil
+	t.Cleanup(func() { localEnvironment = nil })
+
+	assign(Atom{Value: "a"}, Atom{Value: "global-a"})
+	assign(Atom{Value: "fallback"}, Atom{Value: "global-fallback"})
+	localEnvironment = Pair{
+		Car: Pair{
+			Car: Pair{Car: Atom{Value: "a"}, Cdr: Pair{Car: Atom{Value: "b"}, Cdr: nil}},
+			Cdr: Pair{Car: Pair{Car: Atom{Value: "local-a"}, Cdr: Pair{Car: Atom{Value: "local-b"}, Cdr: nil}}, Cdr: nil},
+		},
+		Cdr: nil,
+	}
+
+	for _, test := range []struct {
+		name string
+		want string
+	}{
+		{name: "a", want: "local-a"},
+		{name: "b", want: "local-b"},
+		{name: "fallback", want: "global-fallback"},
+		{name: "missing", want: "missing"},
+	} {
+		t.Run(test.name, func(t *testing.T) {
+			if got := FormatSExpr(lookup(Atom{Value: test.name})); got != test.want {
+				t.Errorf("lookup(%q) = %q, want %q", test.name, got, test.want)
+			}
+		})
+	}
+}
+
+func TestNestedLocalLookupUsesNewestFrame(t *testing.T) {
+	localEnvironment = Pair{
+		Car: Pair{
+			Car: Pair{Car: Atom{Value: "name"}, Cdr: nil},
+			Cdr: Pair{Car: Pair{Car: Atom{Value: "new"}, Cdr: nil}, Cdr: nil},
+		},
+		Cdr: Pair{
+			Car: Pair{
+				Car: Pair{Car: Atom{Value: "name"}, Cdr: nil},
+				Cdr: Pair{Car: Pair{Car: Atom{Value: "old"}, Cdr: nil}, Cdr: nil},
+			},
+			Cdr: nil,
+		},
+	}
+	t.Cleanup(func() { localEnvironment = nil })
+
+	if got := FormatSExpr(lookup(Atom{Value: "name"})); got != "new" {
+		t.Errorf("nested local lookup = %q, want %q", got, "new")
+	}
+}
+
+func TestLocalLookupHandlesEmptyValuesAndMalformedFrames(t *testing.T) {
+	resetRho(t)
+	localEnvironment = nil
+	t.Cleanup(func() { localEnvironment = nil })
+
+	assign(Atom{Value: "empty"}, Atom{Value: "global"})
+	assign(Atom{Value: "mismatch"}, Atom{Value: "global-mismatch"})
+
+	tests := []struct {
+		name       string
+		lookupName string
+		stack      SExpr
+		want       string
+	}{
+		{
+			name:       "empty frame falls back",
+			lookupName: "missing",
+			stack: Pair{
+				Car: Pair{
+					Car: nil,
+					Cdr: Pair{Car: nil, Cdr: nil},
+				},
+				Cdr: nil,
+			},
+			want: "missing",
+		},
+		{
+			name:       "nil local value shadows global",
+			lookupName: "empty",
+			stack: Pair{
+				Car: Pair{
+					Car: Pair{Car: Atom{Value: "empty"}, Cdr: nil},
+					Cdr: Pair{Car: Pair{Car: nil, Cdr: nil}, Cdr: nil},
+				},
+				Cdr: nil,
+			},
+			want: "()",
+		},
+		{
+			name:       "mismatched frame falls back",
+			lookupName: "mismatch",
+			stack: Pair{
+				Car: Pair{
+					Car: Pair{Car: Atom{Value: "mismatch"}, Cdr: nil},
+					Cdr: Pair{Car: nil, Cdr: nil},
+				},
+				Cdr: nil,
+			},
+			want: "global-mismatch",
+		},
+		{
+			name:       "malformed stack falls back",
+			lookupName: "empty",
+			stack:      Atom{Value: "malformed"},
+			want:       "global",
+		},
+	}
+
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			localEnvironment = test.stack
+			got := FormatSExpr(lookup(Atom{Value: test.lookupName}))
+			if got != test.want {
+				t.Errorf("lookup(%q) = %q, want %q", test.lookupName, got, test.want)
+			}
+		})
+	}
+}
+
 func TestAssignmentEvaluation(t *testing.T) {
 	resetRho(t)
 

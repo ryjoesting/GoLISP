@@ -130,6 +130,57 @@ func TestEvalExpressions(t *testing.T) {
 	}
 }
 
+func TestFunctionExpressionIsPreserved(t *testing.T) {
+	resetRho(t)
+	if got := FormatSExpr(evalInput(t, "(function () 42)")); got != "(function () 42)" {
+		t.Errorf("empty-parameter function = %q, want %q", got, "(function () 42)")
+	}
+	if got := FormatSExpr(evalInput(t, "(function (x) (unknown))")); got != "(function (x) (unknown))" {
+		t.Errorf("unevaluated function body = %q, want %q", got, "(function (x) (unknown))")
+	}
+
+	input := "(function (x y) (add x y))"
+	if got := FormatSExpr(evalInput(t, input)); got != input {
+		t.Errorf("Eval(%q) = %q, want %q", input, got, input)
+	}
+
+	if got := FormatSExpr(evalInput(t, "(set addTwo (function (x y) (add x y)))")); got != "()" {
+		t.Errorf("set function result = %q, want %q", got, "()")
+	}
+	if got := FormatSExpr(evalInput(t, "addTwo")); got != "(function (x y) (add x y))" {
+		t.Errorf("stored function = %q, want %q", got, "(function (x y) (add x y))")
+	}
+	if got := FormatSExpr(evalInput(t, "(cons (function () 1) ())")); got != "((function () 1))" {
+		t.Errorf("function passed as value = %q, want %q", got, "((function () 1))")
+	}
+}
+
+func TestFunctionExpressionErrors(t *testing.T) {
+	tests := []struct {
+		input string
+		want  string
+	}{
+		{input: "(function)", want: "function expects 2 argument(s), got 0"},
+		{input: "(function (x))", want: "function expects 2 argument(s), got 1"},
+		{input: "(function x body)", want: "function parameters must form a list"},
+		{input: "(function ((x)) body)", want: "function parameters must be atoms"},
+	}
+
+	for _, test := range tests {
+		t.Run(test.input, func(t *testing.T) {
+			parser := NewParser(NewLexer(strings.NewReader(test.input)))
+			expr, err := parser.ParseExpr()
+			if err != nil {
+				t.Fatalf("ParseExpr(%q) returned error: %v", test.input, err)
+			}
+			_, err = Eval(expr)
+			if err == nil || err.Error() != test.want {
+				t.Errorf("Eval(%q) error = %v, want %q", test.input, err, test.want)
+			}
+		})
+	}
+}
+
 func TestEvalErrors(t *testing.T) {
 	tests := []struct {
 		name  string

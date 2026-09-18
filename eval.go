@@ -110,6 +110,15 @@ func Eval(expr SExpr) (SExpr, error) {
 		assign(variable, value)
 		return nil, nil
 	}
+	if name.Value == "function" {
+		if err := requireArgs(name.Value, args, 2); err != nil {
+			return nil, err
+		}
+		if err := validateFunctionParameters(args[0]); err != nil {
+			return nil, err
+		}
+		return call, nil
+	}
 	if value, handled, err := evalLogical(name.Value, args); handled {
 		return value, err
 	}
@@ -156,4 +165,18 @@ func Eval(expr SExpr) (SExpr, error) {
 	default:
 		return nil, fmt.Errorf("unknown function: %s", name.Value)
 	}
+}
+
+func validateFunctionParameters(parameters SExpr) error {
+	for parameters != nil {
+		parameterList, ok := parameters.(Pair)
+		if !ok {
+			return fmt.Errorf("function parameters must form a list")
+		}
+		if _, ok := parameterList.Car.(Atom); !ok {
+			return fmt.Errorf("function parameters must be atoms")
+		}
+		parameters = parameterList.Cdr
+	}
+	return nil
 }
