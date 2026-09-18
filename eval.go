@@ -113,6 +113,9 @@ func Eval(expr SExpr) (SExpr, error) {
 	if value, handled, err := evalLogical(name.Value, args); handled {
 		return value, err
 	}
+	if value, handled, err := evalMath(name.Value, args); handled {
+		return value, err
+	}
 
 	values, err := evaluateArgs(args)
 	if err != nil {

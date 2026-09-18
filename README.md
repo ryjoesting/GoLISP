@@ -78,7 +78,7 @@ hello
 45
 ```
 
-Number-looking values such as `45` are currently ordinary symbols. The interpreter does not perform numeric conversion or arithmetic. The symbol `nil` is also an ordinary symbol; the empty list is written as `()`.
+Number-looking values such as `45` are ordinary symbols except when passed to a math function, which interprets them as signed integers. The symbol `nil` is also an ordinary symbol; the empty list is written as `()`.
 
 ### Lists
 
@@ -167,6 +167,26 @@ Results:
 (a)
 (a b c)
 (a . b)
+```
+
+### Math functions
+
+`add`, `sub`, `mul`, `div`, and `rem` take two integer atoms. `div` uses integer division, and `rem` returns the remainder. `lt` returns `T` when its first argument is less than its second argument and `()` otherwise:
+
+```text
+(add 2 3)
+(div 7 2)
+(rem 7 2)
+(lt 2 3)
+```
+
+Results:
+
+```text
+5
+3
+1
+T
 ```
 
 ### `quote`
