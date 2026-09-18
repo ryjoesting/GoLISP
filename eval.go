@@ -110,6 +110,9 @@ func Eval(expr SExpr) (SExpr, error) {
 		assign(variable, value)
 		return nil, nil
 	}
+	if value, handled, err := evalLogical(name.Value, args); handled {
+		return value, err
+	}
 
 	values, err := evaluateArgs(args)
 	if err != nil {

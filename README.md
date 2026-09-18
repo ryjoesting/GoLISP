@@ -279,6 +279,35 @@ T
 
 The behavior of `(list? ())` is undefined by the assignment. The current implementation returns `()`.
 
+### `and?` and `or?`
+
+These operators evaluate only the expressions needed to determine the result:
+
+```text
+(and? 'T 'a)
+(or? () 'a)
+```
+
+`and?` returns `()` immediately when its first argument is nil; otherwise it returns the evaluated second argument. `or?` returns the evaluated first argument immediately when it is non-nil; otherwise it evaluates and returns the second argument. Both operators require exactly two arguments.
+
+### `eq?`
+
+`eq?` evaluates two arguments and compares them only when both results are atoms. Matching atom values return `T`; nil and pairs return `()` even when two pairs have identical contents.
+
+### `if`
+
+`if` requires a condition and two branches. It evaluates the condition, then evaluates only the true branch when the condition is non-nil or only the false branch when it is nil.
+
+### `cond`
+
+`cond` takes one list containing alternating condition and result expressions:
+
+```text
+(cond (() 'first 'T 'fallback))
+```
+
+Conditions are evaluated from left to right. The result paired with the first non-nil condition is evaluated and returned. If no condition succeeds, `cond` returns `()`. Its clause list must be proper and contain an even number of expressions.
+
 ## REPL Error Behavior
 
 Successful results are printed to standard output. Evaluation errors are printed to standard error with an `Error:` prefix. After an evaluation error, GoLISP discards the remainder of the current input line and continues with the next line.
