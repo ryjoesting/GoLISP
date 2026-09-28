@@ -113,11 +113,31 @@ A dotted pair can be created with `cons` and printed, but dotted-pair input synt
 - The empty list `()` evaluates to `()`.
 - A standalone atom is looked up in the global environment. An unbound atom evaluates to itself.
 - A non-empty list is treated as a function call.
-- The first element of a call must be an atom naming a supported built-in function.
+- The first element of a call must be an atom naming a supported built-in or user-defined function.
 - Ordinary function arguments are evaluated before the function runs.
-- `quote`, `eval`, and `set` have special evaluation rules.
+- `quote`, `eval`, `set`, and `def` have special evaluation rules.
+- User-defined function parameters are bound in a local environment for the duration of the call. Local bindings shadow global bindings, and nested calls use nested local environments.
 
-Function names are not general function values. For example, `a` performs symbol lookup, while `(a)` attempts to call a zero-argument function named `a`. Since only built-in functions are supported, `(a)` produces an unknown-function error unless that behavior is changed in a future version.
+Function names are not general function values. For example, `a` performs symbol lookup, while `(a)` attempts to call a zero-argument function named `a`. A user-defined function is created with `function` and stored with `set`:
+
+```text
+(set addTwo (function (x y) (add x y)))
+(addTwo 2 3)
+```
+
+The final expression evaluates to `5`. Function bodies are evaluated when called, and local environments are removed when the call returns.
+
+The `def` form is shorthand for storing a function with `set`:
+
+```text
+(def addTwo (x y) (add x y))
+```
+
+This is equivalent to:
+
+```text
+(set addTwo (function (x y) (add x y)))
+```
 
 ## Built-in Functions
 
@@ -244,8 +264,6 @@ answer
 ```
 
 The final expression evaluates to `4`.
-
-There are no local environments or function parameters yet.
 
 ### `nil?`
 

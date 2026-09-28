@@ -155,6 +155,125 @@ func TestFunctionExpressionIsPreserved(t *testing.T) {
 	}
 }
 
+func TestFunctionCallsUseLocalArguments(t *testing.T) {
+	resetRho(t)
+	localEnvironment = nil
+	t.Cleanup(func() { localEnvironment = nil })
+
+	evalInput(t, "(set addTwo (function (x y) (add x y)))")
+	if got := FormatSExpr(evalInput(t, "(addTwo 2 3)")); got != "5" {
+		t.Errorf("function call = %q, want %q", got, "5")
+	}
+
+	evalInput(t, "(set x 10)")
+	evalInput(t, "(set readX (function () x))")
+	if got := FormatSExpr(evalInput(t, "(readX)")); got != "10" {
+		t.Errorf("function global fallback = %q, want %q", got, "10")
+	}
+
+	evalInput(t, "(set shadow (function (x) x))")
+	if got := FormatSExpr(evalInput(t, "(shadow 7)")); got != "7" {
+		t.Errorf("function local shadowing = %q, want %q", got, "7")
+	}
+}
+
+func TestDefDefinesFunction(t *testing.T) {
+	resetRho(t)
+	localEnvironment = nil
+	t.Cleanup(func() { localEnvironment = nil })
+
+	if got := FormatSExpr(evalInput(t, "(def addTwo (x y) (add x y))")); got != "()" {
+		t.Errorf("def result = %q, want %q", got, "()")
+	}
+	if got := FormatSExpr(evalInput(t, "addTwo")); got != "(function (x y) (add x y))" {
+		t.Errorf("defined function = %q, want %q", got, "(function (x y) (add x y))")
+	}
+	if got := FormatSExpr(evalInput(t, "(addTwo 2 3)")); got != "5" {
+		t.Errorf("def function call = %q, want %q", got, "5")
+	}
+
+	evalInput(t, "(def constant () 42)")
+	if got := FormatSExpr(evalInput(t, "(constant)")); got != "42" {
+		t.Errorf("zero-argument def call = %q, want %q", got, "42")
+	}
+}
+
+func TestDefPreservesUnevaluatedBody(t *testing.T) {
+	resetRho(t)
+
+	evalInput(t, "(def delayed () (unknown))")
+	if got := FormatSExpr(evalInput(t, "delayed")); got != "(function () (unknown))" {
+		t.Errorf("stored def body = %q, want %q", got, "(function () (unknown))")
+	}
+}
+
+func TestDefErrors(t *testing.T) {
+	resetRho(t)
+
+	tests := []struct {
+		input string
+		want  string
+	}{
+		{input: "(def)", want: "def expects 3 argument(s), got 0"},
+		{input: "(def name ())", want: "def expects 3 argument(s), got 2"},
+		{input: "(def name () body extra)", want: "def expects 3 argument(s), got 4"},
+		{input: "(def (name) () body)", want: "def expects an atom name"},
+		{input: "(def name args body)", want: "function parameters must form a list"},
+		{input: "(def name ((arg)) body)", want: "function parameters must be atoms"},
+	}
+
+	for _, test := range tests {
+		t.Run(test.input, func(t *testing.T) {
+			parser := NewParser(NewLexer(strings.NewReader(test.input)))
+			expr, err := parser.ParseExpr()
+			if err != nil {
+				t.Fatalf("ParseExpr(%q) returned error: %v", test.input, err)
+			}
+			_, err = Eval(expr)
+			if err == nil || err.Error() != test.want {
+				t.Errorf("Eval(%q) error = %v, want %q", test.input, err, test.want)
+			}
+		})
+	}
+	if got := FormatSExpr(lookup(Atom{Value: "name"})); got != "name" {
+		t.Errorf("failed def binding = %q, want %q", got, "name")
+	}
+}
+
+func TestNestedFunctionCallsRestoreLocalEnvironment(t *testing.T) {
+	resetRho(t)
+	localEnvironment = nil
+	t.Cleanup(func() { localEnvironment = nil })
+
+	evalInput(t, "(set inner (function (value) (add value 1)))")
+	evalInput(t, "(set outer (function (value) (inner value)))")
+	if got := FormatSExpr(evalInput(t, "(outer 4)")); got != "5" {
+		t.Errorf("nested function call = %q, want %q", got, "5")
+	}
+	if localEnvironment != nil {
+		t.Errorf("local environment after nested call = %s, want ()", FormatSExpr(localEnvironment))
+	}
+}
+
+func TestFunctionCallRestoresLocalEnvironmentOnError(t *testing.T) {
+	resetRho(t)
+	localEnvironment = nil
+	t.Cleanup(func() { localEnvironment = nil })
+
+	evalInput(t, "(set failing (function (value) (unknown value)))")
+	parser := NewParser(NewLexer(strings.NewReader("(failing 1)")))
+	expr, err := parser.ParseExpr()
+	if err != nil {
+		t.Fatalf("ParseExpr returned error: %v", err)
+	}
+	if _, err := Eval(expr); err == nil {
+		t.Fatal("Eval returned nil error for failing function")
+	}
+	if localEnvironment != nil {
+		t.Errorf("local environment after failed call = %s, want ()", FormatSExpr(localEnvironment))
+	}
+}
+
 func TestFunctionExpressionErrors(t *testing.T) {
 	tests := []struct {
 		input string

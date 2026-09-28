@@ -59,6 +59,14 @@ func evaluateArgs(args []SExpr) ([]SExpr, error) {
 	return values, nil
 }
 
+func makeList(values []SExpr) SExpr {
+	var list SExpr
+	for index := len(values) - 1; index >= 0; index-- {
+		list = cons(values[index], list)
+	}
+	return list
+}
+
 func Eval(expr SExpr) (SExpr, error) {
 	if expr == nil {
 		return nil, nil
@@ -108,6 +116,28 @@ func Eval(expr SExpr) (SExpr, error) {
 			return nil, err
 		}
 		assign(variable, value)
+		return nil, nil
+	}
+	if name.Value == "def" {
+		if err := requireArgs(name.Value, args, 3); err != nil {
+			return nil, err
+		}
+		functionName, ok := args[0].(Atom)
+		if !ok {
+			return nil, fmt.Errorf("def expects an atom name")
+		}
+		if err := validateFunctionParameters(args[1]); err != nil {
+			return nil, err
+		}
+
+		function := Pair{
+			Car: Atom{Value: "function"},
+			Cdr: Pair{
+				Car: args[1],
+				Cdr: Pair{Car: args[2], Cdr: nil},
+			},
+		}
+		assign(functionName, function)
 		return nil, nil
 	}
 	if name.Value == "function" {
@@ -163,7 +193,36 @@ func Eval(expr SExpr) (SExpr, error) {
 		}
 		return isList(values[0]), nil
 	default:
-		return nil, fmt.Errorf("unknown function: %s", name.Value)
+		function, ok := lookup(name).(Pair)
+		if !ok {
+			return nil, fmt.Errorf("unknown function: %s", name.Value)
+		}
+
+		functionName, ok := function.Car.(Atom)
+		if !ok || functionName.Value != "function" {
+			return nil, fmt.Errorf("unknown function: %s", name.Value)
+		}
+
+		functionParts, ok := function.Cdr.(Pair)
+		if !ok || functionParts.Cdr == nil {
+			return nil, fmt.Errorf("invalid function: %s", name.Value)
+		}
+		bodyParts, ok := functionParts.Cdr.(Pair)
+		if !ok || bodyParts.Cdr != nil {
+			return nil, fmt.Errorf("invalid function: %s", name.Value)
+		}
+
+		previousEnvironment := localEnvironment
+		localEnvironment = Pair{
+			Car: Pair{
+				Car: functionParts.Car,
+				Cdr: Pair{Car: makeList(values), Cdr: nil},
+			},
+			Cdr: previousEnvironment,
+		}
+		defer func() { localEnvironment = previousEnvironment }()
+
+		return Eval(bodyParts.Car)
 	}
 }
 
